@@ -11,14 +11,18 @@ from time import sleep, time
 from urllib.parse import quote, urlencode
 
 from linkedin_api.client import Client
-from linkedin_api.utils.helpers import (append_update_post_field_to_posts_list,
-                                        get_id_from_urn,
-                                        get_list_posts_sorted_without_promoted,
-                                        get_update_author_name,
-                                        get_update_author_profile,
-                                        get_update_content, get_update_old,
-                                        get_update_url, parse_list_raw_posts,
-                                        parse_list_raw_urns)
+from linkedin_api.utils.helpers import (
+    append_update_post_field_to_posts_list,
+    get_id_from_urn,
+    get_list_posts_sorted_without_promoted,
+    get_update_author_name,
+    get_update_author_profile,
+    get_update_content,
+    get_update_old,
+    get_update_url,
+    parse_list_raw_posts,
+    parse_list_raw_urns,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,9 @@ def default_evade():
     A catch-all method to try and evade suspension from Linkedin.
     Currenly, just delays the request by a random (bounded) time
     """
-    sleep(random.randint(2, 5))  # sleep a random duration to try and evade suspention
+    sleep(
+        random.randint(2, 5)
+    )  # sleep a random duration to try and evade suspention
 
 
 class Linkedin(object):
@@ -112,8 +118,13 @@ class Linkedin(object):
             "moduleKey": "member-shares:phone",
             "includeLongTermHistory": True,
         }
-        profile = self.get_profile(public_id=public_id, urn_id=urn_id)
-        profile_urn = profile["profile_urn"].replace("fs_miniProfile", "fsd_profile")
+        if urn_id:
+            profile_urn = f"urn:li:fsd_profile:{urn_id}"
+        else:
+            profile = self.get_profile(public_id=public_id)
+            profile_urn = profile["profile_urn"].replace(
+                "fs_miniProfile", "fsd_profile"
+            )
         url_params["profileUrn"] = profile_urn
         url = f"/identity/profileUpdatesV2"
         res = self._fetch(url, params=url_params)
@@ -122,6 +133,8 @@ class Linkedin(object):
             self.logger.info("request failed: {}".format(data["message"]))
             return {}
         while data and data["metadata"]["paginationToken"] != "":
+            if len(data["elements"]) >= post_count:
+                break
             pagination_token = data["metadata"]["paginationToken"]
             url_params["start"] = url_params["start"] + self._MAX_POST_COUNT
             url_params["paginationToken"] = pagination_token
@@ -129,8 +142,6 @@ class Linkedin(object):
             data["metadata"] = res.json()["metadata"]
             data["elements"] = data["elements"] + res.json()["elements"]
             data["paging"] = res.json()["paging"]
-            if len(data["elements"]) > post_count:
-                break
         return data["elements"]
 
     def search(self, params, limit=-1, offset=0):
@@ -168,7 +179,9 @@ class Linkedin(object):
 
             res = self._fetch(
                 f"/search/blended?{urlencode(default_params, safe='(),')}",
-                headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+                headers={
+                    "accept": "application/vnd.linkedin.normalized+json+2.1"
+                },
             )
             data = res.json()
 
@@ -265,7 +278,7 @@ class Linkedin(object):
         if connection_of:
             filters.append(f"connectionOf->{connection_of}")
         if network_depths:
-            filters.append(f'network->{"|".join(network_depth)}')
+            filters.append(f'network->{"|".join(network_depths)}')
         elif network_depth:
             filters.append(f"network->{network_depths}")
         if regions:
@@ -279,7 +292,9 @@ class Linkedin(object):
         if profile_languages:
             filters.append(f'profileLanguage->{"|".join(profile_languages)}')
         if nonprofit_interests:
-            filters.append(f'nonprofitInterest->{"|".join(nonprofit_interests)}')
+            filters.append(
+                f'nonprofitInterest->{"|".join(nonprofit_interests)}'
+            )
         if schools:
             filters.append(f'schools->{"|".join(schools)}')
         if service_categories:
@@ -452,7 +467,9 @@ class Linkedin(object):
 
             res = self._fetch(
                 f"/search/hits?{urlencode(default_params, safe='(),')}",
-                headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+                headers={
+                    "accept": "application/vnd.linkedin.normalized+json+2.1"
+                },
             )
             data = res.json()
 
@@ -504,7 +521,10 @@ class Linkedin(object):
 
         websites = data.get("websites", [])
         for item in websites:
-            if "com.linkedin.voyager.identity.profile.StandardWebsite" in item["type"]:
+            if (
+                "com.linkedin.voyager.identity.profile.StandardWebsite"
+                in item["type"]
+            ):
                 item["label"] = item["type"][
                     "com.linkedin.voyager.identity.profile.StandardWebsite"
                 ]["category"]
@@ -584,7 +604,9 @@ class Linkedin(object):
         """
         # NOTE this still works for now, but will probably eventually have to be converted to
         # https://www.linkedin.com/voyager/api/identity/profiles/ACoAAAKT9JQBsH7LwKaE9Myay9WcX8OVGuDq9Uw
-        res = self._fetch(f"/identity/profiles/{public_id or urn_id}/profileView")
+        res = self._fetch(
+            f"/identity/profiles/{public_id or urn_id}/profileView"
+        )
 
         data = res.json()
         if data and "status" in data and data["status"] != 200:
@@ -595,9 +617,9 @@ class Linkedin(object):
         profile = data["profile"]
         if "miniProfile" in profile:
             if "picture" in profile["miniProfile"]:
-                profile["displayPictureUrl"] = profile["miniProfile"]["picture"][
-                    "com.linkedin.common.VectorImage"
-                ]["rootUrl"]
+                profile["displayPictureUrl"] = profile["miniProfile"][
+                    "picture"
+                ]["com.linkedin.common.VectorImage"]["rootUrl"]
 
                 images_data = profile["miniProfile"]["picture"][
                     "com.linkedin.common.VectorImage"
@@ -608,7 +630,9 @@ class Linkedin(object):
                     )(img)
                     profile[f"img_{w}_{h}"] = url_segment
 
-            profile["profile_id"] = get_id_from_urn(profile["miniProfile"]["entityUrn"])
+            profile["profile_id"] = get_id_from_urn(
+                profile["miniProfile"]["entityUrn"]
+            )
             profile["profile_urn"] = profile["miniProfile"]["entityUrn"]
             profile["member_urn"] = profile["miniProfile"]["objectUrn"]
 
@@ -720,7 +744,8 @@ class Linkedin(object):
             or (max_results is not None and len(results) >= max_results)
             or (
                 max_results is not None
-                and len(results) / max_results >= Linkedin._MAX_REPEATED_REQUESTS
+                and len(results) / max_results
+                >= Linkedin._MAX_REPEATED_REQUESTS
             )
         ):
             return results
@@ -765,7 +790,8 @@ class Linkedin(object):
             or (max_results is not None and len(results) >= max_results)
             or (
                 max_results is not None
-                and len(results) / max_results >= Linkedin._MAX_REPEATED_REQUESTS
+                and len(results) / max_results
+                >= Linkedin._MAX_REPEATED_REQUESTS
             )
         ):
             return results
@@ -870,6 +896,9 @@ class Linkedin(object):
 
         data = res.json()
 
+        if data["elements"] == []:
+            return {}
+
         item = data["elements"][0]
         item["id"] = get_id_from_urn(item["entityUrn"])
 
@@ -896,7 +925,9 @@ class Linkedin(object):
         :return: Conversation data
         :rtype: dict
         """
-        res = self._fetch(f"/messaging/conversations/{conversation_urn_id}/events")
+        res = self._fetch(
+            f"/messaging/conversations/{conversation_urn_id}/events"
+        )
 
         return res.json()
 
@@ -910,7 +941,9 @@ class Linkedin(object):
         rand_byte_array = bytearray(random_int_array)
         return "".join([chr(i) for i in rand_byte_array])
 
-    def send_message(self, message_body, conversation_urn_id=None, recipients=None):
+    def send_message(
+        self, message_body, conversation_urn_id=None, recipients=None
+    ):
         """Send a message to a given conversation.
 
         :param message_body: Message text to send
@@ -926,7 +959,9 @@ class Linkedin(object):
         params = {"action": "create"}
 
         if not (conversation_urn_id or recipients):
-            self.logger.debug("Must provide [conversation_urn_id] or [recipients].")
+            self.logger.debug(
+                "Must provide [conversation_urn_id] or [recipients]."
+            )
             return True
 
         message_event = {
@@ -1026,7 +1061,9 @@ class Linkedin(object):
             return []
 
         response_payload = res.json()
-        return [element["invitation"] for element in response_payload["elements"]]
+        return [
+            element["invitation"] for element in response_payload["elements"]
+        ]
 
     def reply_invitation(
         self, invitation_entity_urn, invitation_shared_secret, action="accept"
@@ -1173,7 +1210,9 @@ class Linkedin(object):
 
         if not target_profile_member_urn_id:
             profile = self.get_profile(public_id=target_profile_public_id)
-            target_profile_member_urn_id = int(get_id_from_urn(profile["member_urn"]))
+            target_profile_member_urn_id = int(
+                get_id_from_urn(profile["member_urn"])
+            )
 
         if not network_distance:
             profile_network_info = self.get_profile_network_info(
@@ -1188,7 +1227,9 @@ class Linkedin(object):
         viewer_privacy_setting = "F"
         me_member_id = me_profile["plainId"]
 
-        client_application_instance = self.client.metadata["clientApplicationInstance"]
+        client_application_instance = self.client.metadata[
+            "clientApplicationInstance"
+        ]
 
         eventBody = {
             "viewerPrivacySetting": viewer_privacy_setting,
@@ -1348,7 +1389,9 @@ class Linkedin(object):
             res = self._fetch(
                 f"/feed/updatesV2",
                 params=params,
-                headers={"accept": "application/vnd.linkedin.normalized+json+2.1"},
+                headers={
+                    "accept": "application/vnd.linkedin.normalized+json+2.1"
+                },
             )
             """
             Response includes two keya:
@@ -1374,7 +1417,9 @@ class Linkedin(object):
             # NOTE: we could also check for the `total` returned in the response.
             # This is in data["data"]["paging"]["total"]
             if (
-                (limit > -1 and len(l_urns) >= limit)  # if our results exceed set limit
+                (
+                    limit > -1 and len(l_urns) >= limit
+                )  # if our results exceed set limit
                 or len(l_urns) / count >= Linkedin._MAX_REPEATED_REQUESTS
             ) or len(l_raw_urns) == 0:
                 break
